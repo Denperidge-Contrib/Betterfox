@@ -61,6 +61,7 @@ select_if_backup = [
     "Backup current profile (Recommended)",
     "Do not backup current profile"
 ]
+SELECT_IF_BACKUP_NO_INDEX = 1
     
 select_config = [
         "Fastfox\t- Increase Firefox's browsing speed. Give Chrome a run for its money!",
@@ -72,7 +73,7 @@ select_config = [
 
 
 def cli(screen):
-    global scroll_pos, cli_options
+    global scroll_pos, cli_options, selected_config
     keep_running = True
     
     screen.addstr("\t[ARROW_UP/PAGE_UP] Move up\t\t[ENTER] SELECT\t\n", curses.A_REVERSE)
@@ -97,18 +98,18 @@ def cli(screen):
         scroll_pos += 1
     elif action == "select":
         if cli_options == select_if_backup:
-            if scroll_pos != 1:
+            if scroll_pos != SELECT_IF_BACKUP_NO_INDEX:
                 backup_default_profile()
             cli_options = select_config
 
         elif cli_options == select_config:
-            pass
+            selected_config = cli_options[scroll_pos].split("\t")[0]
         #curses.endwin()
         #all_python_releases[scroll_pos].install()
         #start_cli()
         #return
-        pass
-        cli_options[scroll_pos] 
+        elif cli_options == 
+        #cli_options[scroll_pos] 
     elif action == "exit":
         keep_running = False
 
