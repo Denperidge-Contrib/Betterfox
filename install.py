@@ -52,7 +52,7 @@ def _get_default_profile_folder():
 
 
 def _get_releases():
-    
+    releases = []
     raw_releases = loads(urlopen(f"https://api.github.com/repos/{REPOSITORY_OWNER}/{REPOSITORY_NAME}/releases").read())
     for raw_release in raw_releases:
         name = raw_release["name"] or raw_release["tag_name"]  # or fixes 126.0 not being lodaded
@@ -65,22 +65,22 @@ def _get_releases():
         elif name == "user.js 116.1":
             supported = ["116.0", "116.0.1", "116.0.2", "116.0.3"]  # Assumed from previous release. TODO check with yokoffing
         elif name == "Betterfox v.107":
-            supported = "107.0"  # TODO, check with yokoffing
+            supported = ["107.0"]  # TODO, check with yokoffing
         elif "firefox release" in body.lower():
             trim_body = body.lower()[body.lower().index("firefox release"):]
             supported = re_find_version.findall(trim_body)
             if len(supported) == 0:
                 print(f"Could not parse release in '{name}'. Please post this error message on https://github.com/{REPOSITORY_NAME}/{REPOSITORY_NAME}/issues")
-
+                continue
         else:
             print(f"Could not find firefox release header '{name}'. Please post this error message on https://github.com/{REPOSITORY_NAME}/{REPOSITORY_NAME}/issues")
+            continue
 
-
-        print(name, supported)
-
-
-_get_releases()
-exit()
+        releases.append({
+            "name": name,
+            "url": raw_release["zipball_url"],
+            "supported": supported,
+        })        
 
 
 def backup_default_profile():
