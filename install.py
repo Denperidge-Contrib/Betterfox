@@ -197,13 +197,16 @@ if __name__ == "__main__":
     
     if not args.betterfox_version:
         selected_release = _get_latest_compatible_release(releases)
-
+        
+    if args.interactive or not selected_release:
         if not selected_release:
             print("Could not find a compatible Betterfox version for your Firefox installation.")
-            list_releases(releases, False, True)
-            selection = int(input(f"Select Betterfox version, or press enter without typing a number to cancel [0-{len(releases) - 1}]: "))
+        
+        list_releases(releases, False, True)
+        selection = int(input(f"Select Betterfox version, or press enter without typing a number to cancel [0-{len(releases) - 1}]: "))
 
-            selected_release = releases[selection]
+        selected_release = releases[selection]
+
 
 
     if not args.no_install:
