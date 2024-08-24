@@ -140,6 +140,7 @@ if __name__ == "__main__":
     argparser = ArgumentParser(
 
     )
+    argparser.add_argument("--overrides", "-o", default=default_profile_folder.joinpath("user-overrides.js"), help="if the provided file exists, add overrides to user.js. Defaults to " + default_profile_folder.joinpath("user-overrides.js")),
     argparser.add_argument("--betterfox-version", "-bv", default=latest_compatible_release, help=f"Which version of Betterfox to install. Defaults to the latest compatible release for your installed Firefox version {latest_compatible_release['name'] if latest_compatible_release else f'(N/A. No compatible release found for Firefox version {firefox_version})'}")
     argparser.add_argument("--profile-dir", "-p", "-pd", default=default_profile_folder, help=f"Which profile dir to install user.js in. Defaults to {default_profile_folder}")
     argparser.add_argument("--no-backup", "-nb", action="store_true", default=False, help="disable backup of current profile (not recommended)"),
@@ -179,12 +180,20 @@ if __name__ == "__main__":
 
         selected_release = releases[selection]
 
-    
-
-
 
     userjs_path = extract_betterfox(
         download_betterfox(selected_release["url"]),
         args.profile_dir
     )
     print(f"Installed user.js to {userjs_path} !")
+
+
+    if Path(arg.overrides).exists():
+        print("Found overrides at " + str(arg.overrides))
+
+        with open(str(arg.overrides), "r", encoding="utf-8") as overrides_file:
+            overrides = overrides_file.read()
+        with open(u, "rw", encoding="utf-8") as userjs_file:
+            old_content = userjs_file.read()
+
+            
