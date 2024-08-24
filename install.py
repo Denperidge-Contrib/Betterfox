@@ -80,8 +80,17 @@ def _get_releases():
             "name": name,
             "url": raw_release["zipball_url"],
             "supported": supported,
-        })        
+        })
+    return releases
 
+releases = _get_releases()
+
+def _get_latest_compatible_release(releases):
+    for release in releases:
+        if firefox_version in release["supported"]:
+            return release
+    return None    
+    
 
 def backup_default_profile():
     src = str(_get_default_profile_folder())
@@ -108,10 +117,26 @@ def key_is_action(key: str):
 
 
 select_if_backup = [
-    "Backup current profile (Recommended)",
-    "Do not backup current profile"
+    ["Backup current profile (Recommended)", curses.A_COLOR],
+    ["Do not backup current profile", curses.A_NORMAL]
 ]
 SELECT_IF_BACKUP_NO_INDEX = 1
+
+select_version = []
+latest_compatible_release = _get_latest_compatible_release(releases)
+
+latest_compatible_release_marked = False
+for release in releases:
+    prefix = ""
+
+    if firefox_version in release["supported"]:
+        decoration = curses.A_NORMAL
+        if not latest_compatible_release_marked:
+            prefix = "[Recommended] "
+            latest_compatible_release_marked = True
+    else:
+        decoration = curses.A_DIM
+    select_version.append([f"{prefix}{release['name']}\t(supported: {','.join(release['supported'])})", decoration])
 
 
 def cli(screen):
@@ -125,14 +150,16 @@ def cli(screen):
     screen.addstr(f"\tDETECTED DEFAULT PROFILE: {_get_default_profile_folder().name}\n\n", curses.A_ITALIC)
 
 
-    #screen.addstr("Select \t\n\n", curses.A_ITALIC)
+    if cli_options == select_version:
+        pass
+        #screen.addstr("Betterfox\n", curses.A_UNDERLINE)
 
     
     for option in cli_options[scroll_pos: scroll_pos+SCROLL_SIZE]:
         if cli_options.index(option) == scroll_pos:
-            screen.addstr(f"> {option}\n", curses.A_STANDOUT)
+            screen.addstr(f"> {option[0]}\n", curses.A_STANDOUT)
         else:
-            screen.addstr(f"{option}\n")
+            screen.addstr(f"{option[0]}\n", option[1])
 
     screen.refresh()
 
@@ -145,7 +172,7 @@ def cli(screen):
         if cli_options == select_if_backup:
             if scroll_pos != SELECT_IF_BACKUP_NO_INDEX:
                 backup_default_profile()
-            #cli_options = select_config
+            cli_options = select_version
 
         #elif cli_options == select_config:
         #    selected_config = cli_options[scroll_pos].split("\t")[0]
