@@ -2,10 +2,25 @@ from configparser import ConfigParser, ExtendedInterpolation
 from pathlib import Path
 from shutil import copytree, ignore_patterns
 from datetime import datetime
-from urllib import request
+from urllib.request import urlopen
 from subprocess import check_output
 import curses
+from json import loads
+from re import compile, IGNORECASE
 
+# (?<=firefox release).*?mozilla.org/.*?/firefox/(?P<version>.*?)/
+re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
+
+"""
+
+
+Limitations;
+- Not every github release is loaded in, only the latest ones
+
+"""
+
+REPOSITORY_OWNER = "yokoffing"
+REPOSITORY_NAME = "Betterfox"
 FIREFOX_ROOT = Path.home().joinpath(".mozilla/firefox").absolute()  # TODO: Windows
 SCROLL_SIZE = 5
 
@@ -35,7 +50,38 @@ def _get_default_profile_folder():
             print("Default detected: " + section)
             return FIREFOX_ROOT.joinpath(config_parser[section]["Path"])
 
-        
+
+def _get_releases():
+    
+    raw_releases = loads(urlopen(f"https://api.github.com/repos/{REPOSITORY_OWNER}/{REPOSITORY_NAME}/releases").read())
+    for raw_release in raw_releases:
+        name = raw_release["name"] or raw_release["tag_name"]  # or fixes 126.0 not being lodaded
+        body = raw_release["body"]
+
+
+        # Find which firefox releases are supported. Manual overrides for ones that don't have it written in their thing!
+        if name == "user.js v.122.1":
+            supported = ["120.0", "120.0.1", "121.0", "121.0.1", "122.0", "122.0.1"]  # Assumed from previous release. TODO check with yokoffing
+        elif name == "user.js 116.1":
+            supported = ["116.0", "116.0.1", "116.0.2", "116.0.3"]  # Assumed from previous release. TODO check with yokoffing
+        elif name == "Betterfox v.107":
+            supported = "107.0"  # TODO, check with yokoffing
+        elif "firefox release" in body.lower():
+            trim_body = body.lower()[body.lower().index("firefox release"):]
+            supported = re_find_version.findall(trim_body)
+            if len(supported) == 0:
+                print(f"Could not parse release in '{name}'. Please post this error message on https://github.com/{REPOSITORY_NAME}/{REPOSITORY_NAME}/issues")
+
+        else:
+            print(f"Could not find firefox release header '{name}'. Please post this error message on https://github.com/{REPOSITORY_NAME}/{REPOSITORY_NAME}/issues")
+
+
+        print(name, supported)
+
+
+_get_releases()
+exit()
+
 
 def backup_default_profile():
     src = str(_get_default_profile_folder())
