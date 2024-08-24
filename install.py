@@ -6,13 +6,14 @@ from urllib.request import urlopen
 from subprocess import check_output
 import curses
 from json import loads
-from re import compile, IGNORECASE
+from re import compile, IGNORECASE, sub
 from zipfile import ZipFile
 from io import BytesIO
 from argparse import ArgumentParser
 
 # (?<=firefox release).*?mozilla.org/.*?/firefox/(?P<version>.*?)/
 re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
+re_find_overrides = r"(overrides|prefs).*\n(?P<space>\n)"
 
 """
 
@@ -140,10 +141,11 @@ if __name__ == "__main__":
     argparser = ArgumentParser(
 
     )
-    argparser.add_argument("--overrides", "-o", default=default_profile_folder.joinpath("user-overrides.js"), help="if the provided file exists, add overrides to user.js. Defaults to " + default_profile_folder.joinpath("user-overrides.js")),
+    argparser.add_argument("--overrides", "-o", default=default_profile_folder.joinpath("user-overrides.js"), help="if the provided file exists, add overrides to user.js. Defaults to " + str(default_profile_folder.joinpath("user-overrides.js"))),
     argparser.add_argument("--betterfox-version", "-bv", default=latest_compatible_release, help=f"Which version of Betterfox to install. Defaults to the latest compatible release for your installed Firefox version {latest_compatible_release['name'] if latest_compatible_release else f'(N/A. No compatible release found for Firefox version {firefox_version})'}")
     argparser.add_argument("--profile-dir", "-p", "-pd", default=default_profile_folder, help=f"Which profile dir to install user.js in. Defaults to {default_profile_folder}")
     argparser.add_argument("--no-backup", "-nb", action="store_true", default=False, help="disable backup of current profile (not recommended)"),
+    argparser.add_argument("--no-install", "-ni", action="store_true", default=False, help="don't install Betterfox"),
     
     listfuncs = argparser.add_mutually_exclusive_group()
     listfuncs.add_argument("--list", action="store_true", default=False, help=f"List all Betterfox releases compatible with your version of Firefox ({firefox_version})")
@@ -181,19 +183,24 @@ if __name__ == "__main__":
         selected_release = releases[selection]
 
 
-    userjs_path = extract_betterfox(
-        download_betterfox(selected_release["url"]),
-        args.profile_dir
-    )
-    print(f"Installed user.js to {userjs_path} !")
+    if not args.no_install:
+        userjs_path = extract_betterfox(
+            download_betterfox(selected_release["url"]),
+            args.profile_dir
+        )
+        print(f"Installed user.js to {userjs_path} !")
 
 
-    if Path(arg.overrides).exists():
-        print("Found overrides at " + str(arg.overrides))
+        if Path(args.overrides).exists():
+            print("Found overrides at " + str(args.overrides))
 
-        with open(str(arg.overrides), "r", encoding="utf-8") as overrides_file:
-            overrides = overrides_file.read()
-        with open(u, "rw", encoding="utf-8") as userjs_file:
-            old_content = userjs_file.read()
+            with open(str(args.overrides), "r", encoding="utf-8") as overrides_file:
+                overrides = overrides_file.read()
+            with open(userjs_path, "r", encoding="utf-8") as userjs_file:
+                old_content = userjs_file.read()
+                new_content = sub(re_find_overrides, "\n" + overrides + "\n", old_content, count=1, flags=IGNORECASE)
+            with open(userjs_path, "w", encoding="utf-8") as userjs_file:
+                userjs_file.write(new_content)
+        else:
+            print(f"Found no overrides in {args.overrides}")
 
-            
