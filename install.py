@@ -3,6 +3,7 @@ from pathlib import Path
 from shutil import copytree, ignore_patterns
 from datetime import datetime
 from urllib import request
+from subprocess import check_output
 import curses
 
 FIREFOX_ROOT = Path.home().joinpath(".mozilla/firefox").absolute()  # TODO: Windows
@@ -14,7 +15,11 @@ selected_if_backup = None
 selected_config = ""
 
 
+def _get_firefox_version():
+    ver_string = check_output(["firefox", "--version"], encoding="UTF-8")
+    return ver_string[ver_string.rindex(" ")+1:].strip()
 
+firefox_version = _get_firefox_version()
 
 # STEP 0
 def _get_default_profile_folder():
@@ -56,20 +61,11 @@ def key_is_action(key: str):
 
 
 
-
 select_if_backup = [
     "Backup current profile (Recommended)",
     "Do not backup current profile"
 ]
 SELECT_IF_BACKUP_NO_INDEX = 1
-    
-select_config = [
-        "Fastfox\t- Increase Firefox's browsing speed. Give Chrome a run for its money!",
-        "Securefox\t- Protect user data without causing site breakage.",
-        "Peskyfox\t- Provide a clean, distraction-free browsing experience.",
-        "Smoothfox\t- Get Edge-like smooth scrolling on your favorite browser — or choose something more your style.",
-        "user.js\t\t- All the essentials. None of the breakage. This is your user.js."
-    ]
 
 
 def cli(screen):
@@ -78,6 +74,9 @@ def cli(screen):
     
     screen.addstr("\t[ARROW_UP/PAGE_UP] Move up\t\t[ENTER] SELECT\t\n", curses.A_REVERSE)
     screen.addstr("\t[ARROW_DOWN/PAGE_DOWN] Move down\t[E] Exit\t\n\n", curses.A_REVERSE)
+    screen.addstr(f"\tBETTERFOX INSTALLER\n", curses.A_BOLD)
+    screen.addstr(f"\tDETECTED FIREFOX VERSION: {_get_firefox_version()}\n", curses.A_ITALIC)
+    screen.addstr(f"\tDETECTED DEFAULT PROFILE: {_get_default_profile_folder().name}\n\n", curses.A_ITALIC)
 
 
     #screen.addstr("Select \t\n\n", curses.A_ITALIC)
@@ -100,15 +99,15 @@ def cli(screen):
         if cli_options == select_if_backup:
             if scroll_pos != SELECT_IF_BACKUP_NO_INDEX:
                 backup_default_profile()
-            cli_options = select_config
+            #cli_options = select_config
 
-        elif cli_options == select_config:
-            selected_config = cli_options[scroll_pos].split("\t")[0]
+        #elif cli_options == select_config:
+        #    selected_config = cli_options[scroll_pos].split("\t")[0]
         #curses.endwin()
         #all_python_releases[scroll_pos].install()
         #start_cli()
         #return
-        elif cli_options == 
+        #elif cli_options == 
         #cli_options[scroll_pos] 
     elif action == "exit":
         keep_running = False
