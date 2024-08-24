@@ -30,6 +30,9 @@ scroll_pos = 0
 
 selected_if_backup = None
 selected_config = ""
+userjs_path = None
+
+DEBUG_OVERRIDE = None #or "/home/cat/Downloads/Betterfox-129.0.zip"
 
 
 def _get_firefox_version():
@@ -102,10 +105,24 @@ def backup_default_profile():
 
 
 def download_betterfox(url):
+    # TODO test
     data = BytesIO()
     data.write(urlopen(url).read())
-    print(ZipFile(data).infolist())
-    ZipFile(data).extract("user.js", str(_get_default_profile_folder()))
+    print(ZipFile(data).infolist())  
+    return data  
+
+def extract_betterfox(data):
+    zipfile = ZipFile(data)
+    userjs_zipinfo = None
+    for file in zipfile.filelist:
+        if file.filename.endswith("user.js"):
+            userjs_zipinfo = file
+            userjs_zipinfo.filename = Path(userjs_zipinfo.filename).name
+
+    if not userjs_zipinfo:
+        raise BaseException("Could not find user.js!")
+    
+    return zipfile.extract(userjs_zipinfo, str(_get_default_profile_folder()))
 
 
 def key_is_action(key: str):
@@ -150,7 +167,7 @@ for release in releases:
 
 
 def cli(screen):
-    global scroll_pos, cli_options, selected_config
+    global scroll_pos, cli_options, selected_config, userjs_path
     keep_running = True
     
     screen.addstr("\t[ARROW_UP/PAGE_UP] Move up\t\t[ENTER] SELECT\t\n", curses.A_REVERSE)
@@ -183,9 +200,15 @@ def cli(screen):
             if scroll_pos != SELECT_IF_BACKUP_NO_INDEX:
                 backup_default_profile()
             cli_options = select_version
-        if cli_options == select_version:
-            download_betterfox(releases[scroll_pos]["url"])
-            screen.addstr("Done\n")
+        elif cli_options == select_version:
+            if not DEBUG_OVERRIDE:
+                userjs_path = extract_betterfox(
+                    download_betterfox(releases[scroll_pos]["url"])
+                )
+            else:
+                userjs_path = extract_betterfox(DEBUG_OVERRIDE)
+            keep_running = False
+        scroll_pos = 0
 
         #elif cli_options == select_config:
         #    selected_config = cli_options[scroll_pos].split("\t")[0]
@@ -208,3 +231,4 @@ def cli(screen):
 if __name__ == "__main__":
     cli_options = select_if_backup
     curses.wrapper(cli)
+    print(f"Installed user.js to {userjs_path} !")
