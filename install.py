@@ -1,4 +1,4 @@
-from configparser import ConfigParser, ExtendedInterpolation
+from configparser import ConfigParser
 from pathlib import Path
 from shutil import copytree, ignore_patterns
 from datetime import datetime
@@ -17,9 +17,15 @@ re_find_overrides = r"(overrides|prefs).*\n(?P<space>\n)"
 
 """
 
-
 Limitations;
 - Not every github release is loaded in, only the latest ones
+
+
+Building for Windows:
+- pipx install pyinstaller
+- Run `pyinstaller --onefile --name install-betterfox install.py && sleep 3 && mv dist/install-betterfox.exe . && rm install-betterfox.spec && rm -rf ./build/ && rmdir dist`
+  (Sorry, didn't want to add a .gitignore solely for the install script)
+- That's it already
 
 """
 
@@ -124,7 +130,10 @@ def extract_betterfox(data, profile_folder):
 def list_releases(releases, only_supported=False, add_index=False):
     print()
     print(f"Listing {'compatible' if only_supported else 'all'} Betterfox releases:")
-    print(f"Releases marked with '> ' are documented to be compatible with your Firefox version ({firefox_version})")
+    if only_supported:
+        print("Use --list-all to view all available releases")
+    else:
+        print(f"Releases marked with '> ' are documented to be compatible with your Firefox version ({firefox_version})")
     print()
 
     i = 0
@@ -160,12 +169,11 @@ if __name__ == "__main__":
 
     if args.list or args.list_all:
         list_releases(releases, args.list)
+        input("Press ENTER to exit...")
         exit()
 
     if not args.no_backup:
         backup_profile(args.profile_dir)
-
-
 
     if args.betterfox_version:
         # If not None AND not string, default value has been used
@@ -207,4 +215,6 @@ if __name__ == "__main__":
                 userjs_file.write(new_content)
         else:
             print(f"Found no overrides in {args.overrides}")
+    
+    input("Press ENTER to exit...")
 
