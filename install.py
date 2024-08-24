@@ -4,12 +4,12 @@ from shutil import copytree, ignore_patterns
 from datetime import datetime
 from urllib.request import urlopen
 from subprocess import check_output
-import curses
 from json import loads
 from re import compile, IGNORECASE, sub
 from zipfile import ZipFile
 from io import BytesIO
 from argparse import ArgumentParser
+from os import name, getenv
 
 # (?<=firefox release).*?mozilla.org/.*?/firefox/(?P<version>.*?)/
 re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
@@ -25,17 +25,20 @@ Limitations;
 
 REPOSITORY_OWNER = "yokoffing"
 REPOSITORY_NAME = "Betterfox"
-FIREFOX_ROOT = Path.home().joinpath(".mozilla/firefox").absolute()  # TODO: Windows
+FIREFOX_ROOT = Path.home().joinpath(".mozilla/firefox").absolute() if name != "nt" else Path(getenv("APPDATA") + "/Mozilla/Firefox/").resolve()
+DEFAULT_FIREFOX_INSTALL = Path("C:/Program Files/Mozilla Firefox/" if name == "nt" else "")
 
 selected_if_backup = None
 selected_config = ""
 userjs_path = None
 
 
-def _get_firefox_version():
-    ver_string = check_output(["firefox", "--version"], encoding="UTF-8")
-    return ver_string[ver_string.rindex(" ")+1:].strip()
-
+def _get_firefox_version(bin="firefox"):
+    try:
+        ver_string = check_output([bin, "--version"], encoding="UTF-8")
+        return ver_string[ver_string.rindex(" ")+1:].strip()
+    except FileNotFoundError:
+        return _get_firefox_version(str(DEFAULT_FIREFOX_INSTALL.joinpath("firefox")))
 
 # STEP 0
 def _get_default_profile_folder():
@@ -48,8 +51,9 @@ def _get_default_profile_folder():
 
     for section in config_parser.sections():
         if "Default" in config_parser[section]:
-            print("Default detected: " + section)
-            return FIREFOX_ROOT.joinpath(config_parser[section]["Path"])
+            if config_parser[section]["Default"] == "1":
+                print("Default detected: " + section)
+                return FIREFOX_ROOT.joinpath(config_parser[section]["Path"])
 
 
 def _get_releases():
