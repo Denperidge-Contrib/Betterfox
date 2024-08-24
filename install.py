@@ -1,15 +1,15 @@
-from configparser import ConfigParser
-from pathlib import Path
-from shutil import copytree, ignore_patterns
 from datetime import datetime
-from urllib.request import urlopen
-from subprocess import check_output
+from os import name, getenv
 from json import loads
 from re import compile, IGNORECASE, sub
-from zipfile import ZipFile
-from io import BytesIO
+from pathlib import Path
+from configparser import ConfigParser
 from argparse import ArgumentParser
-from os import name, getenv
+from shutil import copytree, ignore_patterns
+from urllib.request import urlopen
+from subprocess import check_output
+from io import BytesIO
+from zipfile import ZipFile
 
 """
 install(-betterfox).py
@@ -34,8 +34,6 @@ Building for Windows:
 re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
 re_find_overrides = r"(overrides|prefs).*\n(?P<space>\n)"
 
-REPOSITORY_OWNER = "yokoffing"
-REPOSITORY_NAME = "Betterfox"
 FIREFOX_ROOT = Path.home().joinpath(".mozilla/firefox").absolute() if name != "nt" else Path(getenv("APPDATA") + "/Mozilla/Firefox/").resolve()
 DEFAULT_FIREFOX_INSTALL = Path("C:/Program Files/Mozilla Firefox/" if name == "nt" else "")
 
@@ -66,9 +64,9 @@ def _get_default_profile_folder():
                 return FIREFOX_ROOT.joinpath(config_parser[section]["Path"])
 
 
-def _get_releases():
+def _get_releases(repository_owner, repository_name):
     releases = []
-    raw_releases = loads(urlopen(f"https://api.github.com/repos/{REPOSITORY_OWNER}/{REPOSITORY_NAME}/releases").read())
+    raw_releases = loads(urlopen(f"https://api.github.com/repos/{repository_owner}/{repository_name}/releases").read())
     for raw_release in raw_releases:
         name = raw_release["name"] or raw_release["tag_name"]  # or fixes 126.0 not being lodaded
         body = raw_release["body"]
@@ -85,10 +83,10 @@ def _get_releases():
             trim_body = body.lower()[body.lower().index("firefox release"):]
             supported = re_find_version.findall(trim_body)
             if len(supported) == 0:
-                print(f"Could not parse release in '{name}'. Please post this error message on https://github.com/{REPOSITORY_NAME}/{REPOSITORY_NAME}/issues")
+                print(f"Could not parse release in '{name}'. Please post this error message on https://github.com/{repository_owner}/{repository_name}/issues")
                 continue
         else:
-            print(f"Could not find firefox release header '{name}'. Please post this error message on https://github.com/{REPOSITORY_NAME}/{REPOSITORY_NAME}/issues")
+            print(f"Could not find firefox release header '{name}'. Please post this error message on https://github.com/{repository_owner}/{repository_name}/issues")
             continue
 
         releases.append({
@@ -150,8 +148,6 @@ def list_releases(releases, only_supported=False, add_index=False):
 
 if __name__ == "__main__":
     firefox_version = _get_firefox_version()
-    releases = _get_releases()
-    latest_compatible_release = _get_latest_compatible_release(releases)
     selected_release = None
 
     default_profile_folder = _get_default_profile_folder()
@@ -159,17 +155,27 @@ if __name__ == "__main__":
 
     )
     argparser.add_argument("--overrides", "-o", default=default_profile_folder.joinpath("user-overrides.js"), help="if the provided file exists, add overrides to user.js. Defaults to " + str(default_profile_folder.joinpath("user-overrides.js"))),
-    argparser.add_argument("--betterfox-version", "-bv", default=latest_compatible_release, help=f"Which version of Betterfox to install. Defaults to the latest compatible release for your installed Firefox version {latest_compatible_release['name'] if latest_compatible_release else f'(N/A. No compatible release found for Firefox version {firefox_version})'}")
-    argparser.add_argument("--profile-dir", "-p", "-pd", default=default_profile_folder, help=f"Which profile dir to install user.js in. Defaults to {default_profile_folder}")
-    argparser.add_argument("--no-backup", "-nb", action="store_true", default=False, help="disable backup of current profile (not recommended)"),
-    argparser.add_argument("--no-install", "-ni", action="store_true", default=False, help="don't install Betterfox"),
     
-    listfuncs = argparser.add_mutually_exclusive_group()
-    listfuncs.add_argument("--list", action="store_true", default=False, help=f"List all Betterfox releases compatible with your version of Firefox ({firefox_version})")
-    listfuncs.add_argument("--list-all", action="store_true", default=False, help=f"List all Betterfox releases")
-    listfuncs.add_argument("--interactive", "-i", action="store_true", default=False, help=f"Interactively select Betterfox version")
+    
+    advanced = argparser.add_argument_group("Advanced")
+    advanced.add_argument("--betterfox-version", "-bv", default=None, help=f"Which version of Betterfox to install. Defaults to the latest compatible release for your installed Firefox version")
+    advanced.add_argument("--profile-dir", "-p", "-pd", default=default_profile_folder, help=f"Which profile dir to install user.js in. Defaults to {default_profile_folder}")
+    advanced.add_argument("--repository-owner", "-ro", default="yokoffing", help="owner of the Betterfox repository. Defaults to yokoffing")
+    advanced.add_argument("--repository-name", "-rn", default="Betterfox", help="name of the Betterfox repository. Defaults to Betterfox")
+    
+    disable = argparser.add_argument_group("Disable functionality")
+    disable.add_argument("--no-backup", "-nb", action="store_true", default=False, help="disable backup of current profile (not recommended)"),
+    disable.add_argument("--no-install", "-ni", action="store_true", default=False, help="don't install Betterfox"),
+    
+    modes = argparser.add_mutually_exclusive_group()
+    modes.add_argument("--list", action="store_true", default=False, help=f"List all Betterfox releases compatible with your version of Firefox ({firefox_version})")
+    modes.add_argument("--list-all", action="store_true", default=False, help=f"List all Betterfox releases")
+    modes.add_argument("--interactive", "-i", action="store_true", default=False, help=f"Interactively select Betterfox version")
 
     args = argparser.parse_args()
+
+    releases = _get_releases(args.repository_owner, args.repository_name)
+
 
     if args.list or args.list_all:
         list_releases(releases, args.list)
@@ -190,13 +196,14 @@ if __name__ == "__main__":
             print(f"Using manually selected Betterfox version ({selected_release['name']})")
     
     if not args.betterfox_version:
-        print("Could not find a compatible Betterfox version for your Firefox installation.")
-        
-        list_releases(releases, False, True)
+        selected_release = _get_latest_compatible_release(releases)
 
-        selection = int(input(f"Select Betterfox version, or press enter without typing a number to cancel [0-{len(releases) - 1}]: "))
+        if not selected_release:
+            print("Could not find a compatible Betterfox version for your Firefox installation.")
+            list_releases(releases, False, True)
+            selection = int(input(f"Select Betterfox version, or press enter without typing a number to cancel [0-{len(releases) - 1}]: "))
 
-        selected_release = releases[selection]
+            selected_release = releases[selection]
 
 
     if not args.no_install:
