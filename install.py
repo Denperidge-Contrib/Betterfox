@@ -9,6 +9,7 @@ from json import loads
 from re import compile, IGNORECASE
 from zipfile import ZipFile
 from io import BytesIO
+from argparse import ArgumentParser
 
 # (?<=firefox release).*?mozilla.org/.*?/firefox/(?P<version>.*?)/
 re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
@@ -39,7 +40,6 @@ def _get_firefox_version():
     ver_string = check_output(["firefox", "--version"], encoding="UTF-8")
     return ver_string[ver_string.rindex(" ")+1:].strip()
 
-firefox_version = _get_firefox_version()
 
 # STEP 0
 def _get_default_profile_folder():
@@ -88,8 +88,6 @@ def _get_releases():
         })
     return releases
 
-releases = _get_releases()
-
 def _get_latest_compatible_release(releases):
     for release in releases:
         if firefox_version in release["supported"]:
@@ -97,21 +95,19 @@ def _get_latest_compatible_release(releases):
     return None    
     
 
-def backup_default_profile():
-    src = str(_get_default_profile_folder())
+def backup_profile(src):
     dest = f"{src}-backup-{datetime.today().strftime('%Y-%m-%d-%H-%M-%S')}"
     
     copytree(src, dest, ignore=ignore_patterns("*lock"))
+    print("Backed up profile to " + dest)
 
 
 def download_betterfox(url):
-    # TODO test
     data = BytesIO()
     data.write(urlopen(url).read())
-    print(ZipFile(data).infolist())  
     return data  
 
-def extract_betterfox(data):
+def extract_betterfox(data, profile_folder):
     zipfile = ZipFile(data)
     userjs_zipinfo = None
     for file in zipfile.filelist:
@@ -122,113 +118,59 @@ def extract_betterfox(data):
     if not userjs_zipinfo:
         raise BaseException("Could not find user.js!")
     
-    return zipfile.extract(userjs_zipinfo, str(_get_default_profile_folder()))
+    return zipfile.extract(userjs_zipinfo, profile_folder)
 
-
-def key_is_action(key: str):
-    """ Converts multiple keys to the same string, to allow multiple controls for the same function """
-
-    # Arrow up, Page Up, Arrow Up (Git Bash), Page Up (Git Bash), w, W, z, Z, 8
-    if key in ["KEY_UP", "KEY_PPAGE", "KEY_A2", "KEY_A3", "w", "W", "z", "Z", "8"]:
-        return "up"
-    # Arrow down, Page Down, Arrow down (Git Bash), Page Down (Git Bash), s, S, 5, 2
-    elif key in ["KEY_DOWN", "KEY_NPAGE", "KEY_C2", "KEY_C3", "s", "S", "5", "2"]:
-        return "down"
-    elif key in ["Return", "\n"]:
-        return "select"
-    elif key in ["E", "e"]:
-        return "exit"
-    else:
-        return None
-
-
-
-select_if_backup = [
-    ["Backup current profile (Recommended)", curses.A_COLOR],
-    ["Do not backup current profile", curses.A_NORMAL]
-]
-SELECT_IF_BACKUP_NO_INDEX = 1
-
-select_version = []
-latest_compatible_release = _get_latest_compatible_release(releases)
-
-latest_compatible_release_marked = False
-for release in releases:
-    prefix = ""
-
-    if firefox_version in release["supported"]:
-        decoration = curses.A_NORMAL
-        if not latest_compatible_release_marked:
-            prefix = "[Recommended] "
-            latest_compatible_release_marked = True
-    else:
-        decoration = curses.A_DIM
-    select_version.append([f"{prefix}{release['name']}\t(supported: {','.join(release['supported'])})", decoration])
-
-
-def cli(screen):
-    global scroll_pos, cli_options, selected_config, userjs_path
-    keep_running = True
-    
-    screen.addstr("\t[ARROW_UP/PAGE_UP] Move up\t\t[ENTER] SELECT\t\n", curses.A_REVERSE)
-    screen.addstr("\t[ARROW_DOWN/PAGE_DOWN] Move down\t[E] Exit\t\n\n", curses.A_REVERSE)
-    screen.addstr(f"\tBETTERFOX INSTALLER\n", curses.A_BOLD)
-    screen.addstr(f"\tDETECTED FIREFOX VERSION: {_get_firefox_version()}\n", curses.A_ITALIC)
-    screen.addstr(f"\tDETECTED DEFAULT PROFILE: {_get_default_profile_folder().name}\n\n", curses.A_ITALIC)
-
-
-    if cli_options == select_version:
-        pass
-        #screen.addstr("Betterfox\n", curses.A_UNDERLINE)
-
-    
-    for option in cli_options[scroll_pos: scroll_pos+SCROLL_SIZE]:
-        if cli_options.index(option) == scroll_pos:
-            screen.addstr(f"> {option[0]}\n", curses.A_STANDOUT)
-        else:
-            screen.addstr(f"{option[0]}\n", option[1])
-
-    screen.refresh()
-
-    action = key_is_action(screen.getkey())
-    if action == "up" and scroll_pos > 0:
-        scroll_pos -= 1
-    elif action == "down" and scroll_pos < len(cli_options):
-        scroll_pos += 1
-    elif action == "select":
-        if cli_options == select_if_backup:
-            if scroll_pos != SELECT_IF_BACKUP_NO_INDEX:
-                backup_default_profile()
-            cli_options = select_version
-        elif cli_options == select_version:
-            if not DEBUG_OVERRIDE:
-                userjs_path = extract_betterfox(
-                    download_betterfox(releases[scroll_pos]["url"])
-                )
-            else:
-                userjs_path = extract_betterfox(DEBUG_OVERRIDE)
-            keep_running = False
-        scroll_pos = 0
-
-        #elif cli_options == select_config:
-        #    selected_config = cli_options[scroll_pos].split("\t")[0]
-        #curses.endwin()
-        #all_python_releases[scroll_pos].install()
-        #start_cli()
-        #return
-        #elif cli_options == 
-        #cli_options[scroll_pos] 
-    elif action == "exit":
-        keep_running = False
-
-    screen.refresh()
-    screen.clear()
-
-    if keep_running:
-        cli(screen)
 
 
 if __name__ == "__main__":
-    cli_options = select_if_backup
-    curses.wrapper(cli)
+    firefox_version = _get_firefox_version()
+    releases = _get_releases()
+    latest_compatible_release = _get_latest_compatible_release(releases)
+
+    default_profile_folder = _get_default_profile_folder()
+    argparser = ArgumentParser(
+
+    )
+    argparser.add_argument("--betterfox-version", "-bv", default=latest_compatible_release, help=f"Which version of Betterfox to install. Defaults to the latest compatible release for your installed Firefox version {latest_compatible_release['name'] if latest_compatible_release else f'(N/A. No compatible release found for Firefox version {firefox_version})'}")
+    argparser.add_argument("--profile-dir", "-p", "-pd", default=default_profile_folder, help=f"Which profile dir to install user.js in. Defaults to {default_profile_folder}")
+    argparser.add_argument("--no-backup", "-nb", action="store_true", default=False, help="disable backup of current profile (not recommended)"),
+    argparser.add_argument("--list", action="store_true", default=False, help=f"List all Betterfox releases compatible with your version of Firefox ({firefox_version})")
+    argparser.add_argument("--list-all", action="store_true", default=False, help=f"List all Betterfox releases")
+
+    args = argparser.parse_args()
+
+    if args.list or args.list_all:
+        for release in releases:
+            supported = firefox_version in release["supported"]
+            if args.list_all or (args.list and supported):
+                print(f"{'> ' if supported else ''}{release['name']}\t\t\tSupported: {','.join(release['supported'])}\t{release['url']}")
+        
+        exit()
+
+    if not args.no_backup:
+        backup_profile(args.profile_dir)
+    
+
+    release = None
+    if args.betterfox_version:
+        # If not None AND not string, default value has been used
+        if not isinstance(args.betterfox_version, str):
+            release = args.betterfox_version
+            print(f"Using latest compatible Betterfox version ({release['name']})...")
+        # If string has been passed
+        else:
+            release = next(rel for rel in releases if rel['name'] == args.betterfox_version)
+            print(f"Using manually selected Betterfox version ({release['name']})")
+
+
+    else:
+        print("Didn't")
+
+    userjs_path = extract_betterfox(
+        download_betterfox(release["url"]),
+        args.profile_dir
+    )
     print(f"Installed user.js to {userjs_path} !")
+    #userjs_path = extract_betterfox(DEBUG_OVERRIDE)
+    print()
+    print(args)
