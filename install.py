@@ -7,6 +7,8 @@ from subprocess import check_output
 import curses
 from json import loads
 from re import compile, IGNORECASE
+from zipfile import ZipFile
+from io import BytesIO
 
 # (?<=firefox release).*?mozilla.org/.*?/firefox/(?P<version>.*?)/
 re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
@@ -98,6 +100,14 @@ def backup_default_profile():
     
     copytree(src, dest, ignore=ignore_patterns("*lock"))
 
+
+def download_betterfox(url):
+    data = BytesIO()
+    data.write(urlopen(url).read())
+    print(ZipFile(data).infolist())
+    ZipFile(data).extract("user.js", str(_get_default_profile_folder()))
+
+
 def key_is_action(key: str):
     """ Converts multiple keys to the same string, to allow multiple controls for the same function """
 
@@ -173,6 +183,9 @@ def cli(screen):
             if scroll_pos != SELECT_IF_BACKUP_NO_INDEX:
                 backup_default_profile()
             cli_options = select_version
+        if cli_options == select_version:
+            download_betterfox(releases[scroll_pos]["url"])
+            screen.addstr("Done\n")
 
         #elif cli_options == select_config:
         #    selected_config = cli_options[scroll_pos].split("\t")[0]
