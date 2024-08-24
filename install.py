@@ -11,23 +11,28 @@ from io import BytesIO
 from argparse import ArgumentParser
 from os import name, getenv
 
-# (?<=firefox release).*?mozilla.org/.*?/firefox/(?P<version>.*?)/
-re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
-re_find_overrides = r"(overrides|prefs).*\n(?P<space>\n)"
-
 """
+install(-betterfox).py
 
-Limitations;
-- Not every github release is loaded in, only the latest ones
+When called without arguments, it will:
+- Backup your current firefox profile
+- Automatically download user.js from the latest Betterfox release compatible with your Firefox version into the profile
+- Apply user-overrides in the same directory 
 
+However, you can check out install.py/betterfox-install.exe --help to customise most behaviours!
+
+Limitations:
+- Over time, the get_releases might not list older releases due to limited page size. This can be expanded down the road, though
 
 Building for Windows:
-- pipx install pyinstaller
+- pipx install pyinstaller  (note: you can try without pipx, but this didn't work for me)
 - Run `pyinstaller --onefile --name install-betterfox install.py && sleep 3 && mv dist/install-betterfox.exe . && rm install-betterfox.spec && rm -rf ./build/ && rmdir dist`
   (Sorry, didn't want to add a .gitignore solely for the install script)
-- That's it already
-
+- Done!
 """
+
+re_find_version = compile(r"mozilla.org/.*?/firefox/(?P<version>[\d.]*?)/", IGNORECASE)
+re_find_overrides = r"(overrides|prefs).*\n(?P<space>\n)"
 
 REPOSITORY_OWNER = "yokoffing"
 REPOSITORY_NAME = "Betterfox"
@@ -46,7 +51,6 @@ def _get_firefox_version(bin="firefox"):
     except FileNotFoundError:
         return _get_firefox_version(str(DEFAULT_FIREFOX_INSTALL.joinpath("firefox")))
 
-# STEP 0
 def _get_default_profile_folder():
     config_path = FIREFOX_ROOT.joinpath("profiles.ini")
     
