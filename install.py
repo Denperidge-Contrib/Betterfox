@@ -10,7 +10,7 @@ from urllib.request import urlopen
 from subprocess import check_output
 from io import BytesIO
 from zipfile import ZipFile
-from difflib import unified_diff
+from difflib import unified_diff, context_diff
 
 """
 install(-betterfox).py
@@ -111,16 +111,18 @@ def _get_latest_compatible_release(releases):
         if firefox_version in release["supported"]:
             return release
     return None    
-    
+
+def _generate_datetimestring():
+    return datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
 
 def backup_profile(src):
-    dest = f"{src}-backup-{datetime.today().strftime('%Y-%m-%d-%H-%M-%S')}"
+    dest = f"{src}-backup-{_generate_datetimestring()}"
     
     copytree(src, dest, ignore=ignore_patterns("*lock"))
     print("Backed up profile to " + dest)
 
 
-def download_betterfox(url):
+def download_url(url):
     data = BytesIO()
     data.write(urlopen(url).read())
     return data  
@@ -161,12 +163,27 @@ def _read_file(path):
     return data
 
 
-def compare_user_js(path_one, path_two):
+def get_removed_user_prefs(user_js_path_one, user_js_path_two):
     data = unified_diff(
-        _read_file(path_one),
-        _read_file(path_two)
+        _read_file(user_js_path_one).splitlines(),
+        _read_file(user_js_path_two).splitlines(),
     )
-    print(data)
+    #re_user_pref_parse = compile(r"-user_pref\((?<key>.*?), ?(?<value>.*?)\)")
+
+    removed_user_prefs = []
+
+    for item in data:
+        # Removed non-commented user_pref in new version
+        if item.startswith("-user_pref("): #or item.startswith("+user_pref("):
+            print("Change found: " + item)
+            removed_user_prefs.append(item[1:])
+            # Note: this regex returns "" for strings in both key & value (if value is a string)
+            #print(re_user_pref_parse.match(item).groups())
+    
+    return removed_user_prefs
+
+    
+    
 
 
 if __name__ == "__main__":
@@ -234,25 +251,42 @@ if __name__ == "__main__":
 
     if not args.no_install:
         existing_user_js = Path(args.profile_dir).joinpath("user.js")
-        if not existing_user_js.exists():
+        if existing_user_js.exists():
+            existing_user_js_before_rename = existing_user_js
+            existing_user_js = existing_user_js.rename(existing_user_js.with_name("user.js.old"))
+            print(f"Found existing user.js at {existing_user_js_before_rename}. Moved to {existing_user_js}")
+            
+        else:
             existing_user_js = None
             if args.cleanup:
                 args.cleanup = False
                 print("--cleanup/-c specified, but no previous user.js could be found. Skipping cleanup.")
         
         userjs_path = extract_betterfox(
-            download_betterfox(selected_release["url"]),
-            args.profile_dir,
-            "" if not existing_user_js else ".new"
+            download_url(selected_release["url"]),
+            args.profile_dir
         )
 
         if args.cleanup and existing_user_js:
             print("Running prefs.js cleanup...")
-            compare_user_js(
+            default_resetting_user_prefs = []
+            removed_lines = get_removed_user_prefs(
                 str(existing_user_js),
                 str(userjs_path)
             )
-            exit()
+            prefs_js = _read_file(Path(args.profile_dir).joinpath("prefs.js"))
+
+            for removed_line in removed_lines:
+                if removed_line in prefs_js:
+                    print(f"A line that has been removed from Betterfox ({removed_line}) has been found in your prefs.js")
+                    #download_url("https://kb.mozillazine.org/Browser.cache.disk.enable") # TODO is there no 
+
+            #exit()
+
+            # Cleanup done, move user.js
+            # TODO cleaner writing on userjs_path, determine whether user.js should be backupped here too
+            #existing_user_js.rename(existing_user_js.with_name(f"user.js.{_generate_datetimestring()}"))
+            userjs_path = Path(userjs_path)
 
         print(f"Installed user.js to {userjs_path} !")
 
