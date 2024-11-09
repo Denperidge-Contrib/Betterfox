@@ -10,6 +10,7 @@ from urllib.request import urlopen
 from subprocess import check_output
 from io import BytesIO
 from zipfile import ZipFile
+from difflib import unified_diff
 
 """
 install(-betterfox).py
@@ -124,13 +125,13 @@ def download_betterfox(url):
     data.write(urlopen(url).read())
     return data  
 
-def extract_betterfox(data, profile_folder):
+def extract_betterfox(data, profile_folder, suffix=""):
     zipfile = ZipFile(data)
     userjs_zipinfo = None
     for file in zipfile.filelist:
         if file.filename.endswith("user.js"):
             userjs_zipinfo = file
-            userjs_zipinfo.filename = Path(userjs_zipinfo.filename).name
+            userjs_zipinfo.filename = Path(userjs_zipinfo.filename).name + suffix
 
     if not userjs_zipinfo:
         raise BaseException("Could not find user.js!")
@@ -153,7 +154,20 @@ def list_releases(releases, only_supported=False, add_index=False):
         if not only_supported or (only_supported and supported):
             print(f"{f'[{i}]' if add_index else ''}{'> ' if supported else '  '}{release['name'].ljust(20)}\t\t\tSupported: {','.join(release['supported'])}")
         i+=1
-    
+
+def _read_file(path):
+    with open(path, "r", encoding="utf-8") as file:
+        data = file.read()
+    return data
+
+
+def compare_user_js(path_one, path_two):
+    data = unified_diff(
+        _read_file(path_one),
+        _read_file(path_two)
+    )
+    print(data)
+
 
 if __name__ == "__main__":
     firefox_version = _get_firefox_version()
@@ -171,6 +185,7 @@ if __name__ == "__main__":
     advanced.add_argument("--profile-dir", "-p", "-pd", default=default_profile_folder, help=f"Which profile dir to install user.js in. Defaults to {default_profile_folder}")
     advanced.add_argument("--repository-owner", "-ro", default="yokoffing", help="owner of the Betterfox repository. Defaults to yokoffing")
     advanced.add_argument("--repository-name", "-rn", default="Betterfox", help="name of the Betterfox repository. Defaults to Betterfox")
+    advanced.add_argument("--cleanup", "-c", action="store_true", default=False,  help="If Betterfox was already installed when updating, if a setting is removed from user.js, reset entries in prefs.js to their default value")
     
     disable = argparser.add_argument_group("Disable functionality")
     disable.add_argument("--no-backup", "-nb", action="store_true", default=False, help="disable backup of current profile (not recommended)"),
@@ -217,12 +232,28 @@ if __name__ == "__main__":
         selected_release = releases[selection]
 
 
-
     if not args.no_install:
+        existing_user_js = Path(args.profile_dir).joinpath("user.js")
+        if not existing_user_js.exists():
+            existing_user_js = None
+            if args.cleanup:
+                args.cleanup = False
+                print("--cleanup/-c specified, but no previous user.js could be found. Skipping cleanup.")
+        
         userjs_path = extract_betterfox(
             download_betterfox(selected_release["url"]),
-            args.profile_dir
+            args.profile_dir,
+            "" if not existing_user_js else ".new"
         )
+
+        if args.cleanup and existing_user_js:
+            print("Running prefs.js cleanup...")
+            compare_user_js(
+                str(existing_user_js),
+                str(userjs_path)
+            )
+            exit()
+
         print(f"Installed user.js to {userjs_path} !")
 
 
